@@ -26,3 +26,9 @@ dist-ssr
 # Environment variables
 .env
 .env.*
+
+# Sensitive credentials
+*-firebase-adminsdk-*.json
+
+# Templates and mock data
+*.xlsx
