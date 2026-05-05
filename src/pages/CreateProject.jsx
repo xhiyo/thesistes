@@ -23,7 +23,7 @@ const CreateProject = () => {
     // Check file size (1MB = 1 * 1024 * 1024 bytes)
     const MAX_SIZE = 1 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      alert("Ukuran file terlalu besar! Maksimal ukuran file adalah 1 MB.");
+      alert("Ukuran file terlalu besar! Maksimal ukuran file adalah 100 KB.");
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -237,7 +237,7 @@ const CreateProject = () => {
           </div>
           <div className="shrink-0 bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
             <h3 className="text-sm font-bold text-emerald-800 mb-2 flex items-center justify-center gap-1"><FileSpreadsheet size={16} /> Quick Create</h3>
-            <p className="text-xs text-emerald-600 mb-3 max-w-[200px]">Upload Excel to auto-create questions and responses.<br />Max 1Mb</p>
+            <p className="text-xs text-emerald-600 mb-3 max-w-[200px]">Upload Excel to auto-create questions and responses.<br />Max 100 KB</p>
             <input
               type="file"
               ref={fileInputRef}
