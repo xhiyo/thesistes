@@ -20,6 +20,14 @@ const CreateProject = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Check file size (1MB = 1 * 1024 * 1024 bytes)
+    const MAX_SIZE = 1 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert("Ukuran file terlalu besar! Maksimal ukuran file adalah 1 MB.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -43,7 +51,7 @@ const CreateProject = () => {
         for (let c = 0; c < headerRow.length; c++) {
           let isLikert = true;
           let hasData = false;
-          
+
           for (let r = 1; r < data.length; r++) {
             const val = data[r][c];
             if (val !== undefined && val !== null && val !== '') {
@@ -79,10 +87,10 @@ const CreateProject = () => {
         // If no specific name column found, just use the first non-Likert column if available
         if (nameColIndex === -1) {
           for (let c = 0; c < headerRow.length; c++) {
-             if (!likertColIndices.includes(c)) {
-                nameColIndex = c;
-                break;
-             }
+            if (!likertColIndices.includes(c)) {
+              nameColIndex = c;
+              break;
+            }
           }
         }
 
@@ -100,12 +108,12 @@ const CreateProject = () => {
         for (let i = 1; i < data.length; i++) {
           const row = data[i];
           if (!row || row.length === 0) continue;
-          
+
           // Check if this row has any valid Likert answer
           let hasAnyAnswer = false;
           for (let c of likertColIndices) {
             if (row[c] !== undefined && row[c] !== null && row[c] !== '') {
-              hasAnyAnswer = true; 
+              hasAnyAnswer = true;
               break;
             }
           }
@@ -115,7 +123,7 @@ const CreateProject = () => {
           if (nameColIndex !== -1 && row[nameColIndex]) {
             testerName = String(row[nameColIndex]);
           }
-          
+
           const responseObj = {
             id: `res-${Date.now()}-${i}`,
             testerName
@@ -125,13 +133,13 @@ const CreateProject = () => {
             const c = likertColIndices[j];
             let val = row[c];
             let numVal = Number(val);
-            
+
             // Auto fallback for empty/invalid cell within a detected Likert column
             // We use 3 (Neutral) to ensure we don't break the Cronbach Alpha calc
             if (isNaN(numVal) || numVal < 1 || numVal > 5) {
-              numVal = 3; 
+              numVal = 3;
             }
-            
+
             responseObj[parsedQuestions[j].id] = numVal;
           }
           parsedResponses.push(responseObj);
@@ -159,11 +167,11 @@ const CreateProject = () => {
           setIsSaving(false);
           alert("Gagal menyimpan ke database: " + err.message);
         });
-        
+
       } catch (err) {
         alert("Gagal Import: " + err.message);
       }
-      
+
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsBinaryString(file);
@@ -220,7 +228,7 @@ const CreateProject = () => {
       <Link to="/" className="inline-flex items-center text-sm text-slate-500 hover:text-blue-600 mb-2 transition-colors">
         <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
       </Link>
-      
+
       <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
         <div className="mb-8 border-b border-slate-100 pb-6 flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
@@ -228,8 +236,8 @@ const CreateProject = () => {
             <p className="text-slate-500 mt-2">Design your testing instrument manually, or auto-generate from Excel.</p>
           </div>
           <div className="shrink-0 bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
-            <h3 className="text-sm font-bold text-emerald-800 mb-2 flex items-center justify-center gap-1"><FileSpreadsheet size={16}/> Quick Create</h3>
-            <p className="text-xs text-emerald-600 mb-3 max-w-[200px]">Upload Excel to auto-create questions and responses.</p>
+            <h3 className="text-sm font-bold text-emerald-800 mb-2 flex items-center justify-center gap-1"><FileSpreadsheet size={16} /> Quick Create</h3>
+            <p className="text-xs text-emerald-600 mb-3 max-w-[200px]">Upload Excel to auto-create questions and responses.<br />Max 1Mb</p>
             <input
               type="file"
               ref={fileInputRef}
@@ -237,7 +245,7 @@ const CreateProject = () => {
               accept=".xlsx, .xls, .csv"
               className="hidden"
             />
-            <button 
+            <button
               onClick={() => fileInputRef.current?.click()}
               className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm text-sm font-medium"
             >
@@ -251,8 +259,8 @@ const CreateProject = () => {
           <div className="grid grid-cols-1 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Project Title</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Mobile Banking App UAT"
@@ -260,10 +268,10 @@ const CreateProject = () => {
                 required
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
-              <textarea 
+              <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description of what is being tested..."
@@ -276,28 +284,28 @@ const CreateProject = () => {
           <div className="space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
               <h3 className="font-semibold text-slate-800 text-lg">Testing Instrument (Questions)</h3>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={addQuestion}
                 className="text-sm flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-md font-medium"
               >
                 <Plus size={16} /> Add Question
               </button>
             </div>
-            
+
             {questions.map((q, idx) => (
               <div key={q.id} className="flex gap-4 items-start">
                 <span className="mt-2 font-bold text-slate-400 w-6 text-right">{idx + 1}.</span>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={q.text}
                   onChange={(e) => updateQuestion(q.id, e.target.value)}
                   placeholder="e.g. The application loads quickly."
                   className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   required
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => removeQuestion(q.id)}
                   disabled={questions.length <= 1}
                   className="mt-2 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors"
@@ -309,8 +317,8 @@ const CreateProject = () => {
           </div>
 
           <div className="pt-6 border-t border-slate-100 flex justify-end">
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={isSaving}
               className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-md font-medium"
             >

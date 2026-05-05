@@ -1,19 +1,19 @@
 /**
- * Calculate the variance of an array of numbers.
+ * Calculate the variance of an array of numbers (Sample Variance / VAR.S).
  * @param {number[]} arr - Array of numbers
  * @returns {number} Variance
  */
 const calculateVariance = (arr) => {
   if (arr.length <= 1) return 0;
-  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
-  const squareDiffs = arr.map((val) => Math.pow(val - mean, 2));
-  return squareDiffs.reduce((a, b) => a + b, 0) / (arr.length - 1); // Sample variance
+  const arrNum = arr.map(val => Number(val) || 0);
+  const mean = arrNum.reduce((a, b) => a + b, 0) / arrNum.length;
+  const squareDiffs = arrNum.map((val) => Math.pow(val - mean, 2));
+  return squareDiffs.reduce((a, b) => a + b, 0) / (arrNum.length - 1); // Using n-1 for VAR.S
 };
 
 /**
  * Calculate Cronbach's Alpha for a given set of responses.
- * Responses should be an array of objects where each object is a respondent's answers.
- * e.g., [{ q1: 4, q2: 5 }, { q1: 3, q2: 4 }]
+ * Formula: α = (k / (k - 1)) * (1 - (Σσᵢ² / σₜ²))
  * 
  * @param {Array<Object>} responses - Array of response objects
  * @param {Array<string>} itemKeys - Array of keys representing the test items (e.g., ['q1', 'q2'])
@@ -24,25 +24,32 @@ export const calculateCronbachAlpha = (responses, itemKeys) => {
     return null; // Not enough data to calculate
   }
 
-  const k = itemKeys.length;
-  let sumOfItemVariances = 0;
+  // Listwise Deletion: Abaikan responden yang tidak memiliki jawaban lengkap untuk semua item
+  const validResponses = responses.filter(res =>
+    itemKeys.every(key => res[key] !== undefined && res[key] !== null && res[key] !== "")
+  );
 
-  // Calculate variance for each item (column)
+  if (validResponses.length < 2) return null;
+
+  const k = itemKeys.length; // Jumlah item/pertanyaan
+  let sigma_i_squared_sum = 0; // Σσᵢ² (Total varians semua item)
+
+  // Hitung varians untuk masing-masing item (σᵢ²)
   itemKeys.forEach((key) => {
-    const itemScores = responses.map((res) => res[key] || 0);
-    sumOfItemVariances += calculateVariance(itemScores);
+    const itemScores = validResponses.map((res) => Number(res[key]));
+    sigma_i_squared_sum += calculateVariance(itemScores);
   });
 
-  // Calculate total score variance (row totals)
-  const totalScores = responses.map((res) => {
-    return itemKeys.reduce((sum, key) => sum + (res[key] || 0), 0);
+  // Hitung varians dari total skor tiap responden (σₜ²)
+  const totalScoresPerRespondent = validResponses.map((res) => {
+    return itemKeys.reduce((sum, key) => sum + Number(res[key]), 0);
   });
-  const totalVariance = calculateVariance(totalScores);
+  const sigma_t_squared = calculateVariance(totalScoresPerRespondent);
 
-  if (totalVariance === 0) return 0; // Prevent division by zero
+  if (sigma_t_squared === 0) return 0; // Mencegah pembagian dengan nol
 
-  // Cronbach's Alpha formula: (k / (k - 1)) * (1 - (sum of item variances / total variance))
-  const alpha = (k / (k - 1)) * (1 - sumOfItemVariances / totalVariance);
+  // Rumus Cronbach's Alpha: α = (k / (k - 1)) * (1 - (Σσᵢ² / σₜ²))
+  const alpha = (k / (k - 1)) * (1 - (sigma_i_squared_sum / sigma_t_squared));
 
   return Number(alpha.toFixed(3));
 };
@@ -66,9 +73,16 @@ export const getReliabilityStatus = (alpha) => {
 export const calculateItemStats = (responses, itemKeys) => {
   if (!responses || responses.length === 0 || !itemKeys) return [];
 
+  // Listwise Deletion: Abaikan responden yang tidak memiliki jawaban lengkap untuk korelasi
+  const validResponses = responses.filter(res =>
+    itemKeys.every(key => res[key] !== undefined && res[key] !== null && res[key] !== "")
+  );
+
+  if (validResponses.length === 0) return [];
+
   // Pre-calculate total scores for each respondent for correlation
-  const totalScores = responses.map(res =>
-    itemKeys.reduce((sum, key) => sum + (res[key] || 0), 0)
+  const totalScores = validResponses.map(res =>
+    itemKeys.reduce((sum, key) => sum + Number(res[key]), 0)
   );
 
   const totalMean = totalScores.reduce((a, b) => a + b, 0) / totalScores.length;
@@ -76,7 +90,7 @@ export const calculateItemStats = (responses, itemKeys) => {
   const totalStdDev = Math.sqrt(totalVariance);
 
   return itemKeys.map(key => {
-    const scores = responses.map(res => res[key] || 0);
+    const scores = validResponses.map(res => Number(res[key]));
     const sum = scores.reduce((a, b) => a + b, 0);
     const mean = scores.length > 0 ? sum / scores.length : 0;
     const variance = calculateVariance(scores);
@@ -84,13 +98,13 @@ export const calculateItemStats = (responses, itemKeys) => {
 
     // Calculate Pearson Correlation (Item-Total Correlation)
     let correlation = 0;
-    if (stdDev > 0 && totalStdDev > 0 && responses.length > 1) {
+    if (stdDev > 0 && totalStdDev > 0 && validResponses.length > 1) {
       // Covariance
       let covariance = 0;
-      for (let i = 0; i < responses.length; i++) {
+      for (let i = 0; i < validResponses.length; i++) {
         covariance += (scores[i] - mean) * (totalScores[i] - totalMean);
       }
-      covariance = covariance / (responses.length - 1); // Sample covariance
+      covariance = covariance / (validResponses.length - 1); // Sample covariance
 
       // Pearson r
       correlation = covariance / (stdDev * totalStdDev);

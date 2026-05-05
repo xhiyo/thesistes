@@ -29,7 +29,7 @@ const Dashboard = () => {
       setProjectsData(processed);
       setLoading(false);
     };
-    
+
     fetchProjects();
   }, [currentUser?.email]);
 
