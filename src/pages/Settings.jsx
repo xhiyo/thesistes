@@ -66,7 +66,7 @@ const Settings = () => {
                   <div className="text-slate-500"><Mail size={20} /></div>
                   <div className="flex-1">
                     <p className="text-xs font-bold text-slate-500 uppercase">Email Address</p>
-                    <p className="text-sm font-semibold text-slate-800">{currentUser?.email || 'admin@coremetrics.app'}</p>
+                    <p className="text-sm font-semibold text-slate-800">{currentUser?.email || 'admin@reliai.app'}</p>
                   </div>
                 </div>
               </div>

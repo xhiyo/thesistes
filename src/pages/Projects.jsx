@@ -54,7 +54,7 @@ const Projects = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <FolderKanban className="text-blue-600" />
-            All QA Projects
+            All reli Projects
           </h1>
           <p className="text-slate-500 text-sm mt-1">Daftar seluruh instrumen pengujian yang ada di sistem.</p>
         </div>

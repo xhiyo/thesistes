@@ -33,7 +33,7 @@ const DashboardLayout = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'QA Projects', path: '/projects', icon: FolderKanban },
+    { name: 'reli Projects', path: '/projects', icon: FolderKanban },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
@@ -42,9 +42,8 @@ const DashboardLayout = () => {
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10">
         <div className="p-6 border-b border-slate-200">
-          <h1 className="text-xl font-bold text-blue-600 flex items-center gap-2">
-            <span className="bg-blue-600 text-white p-1 rounded-md">QA</span>
-            CoreMetrics
+          <h1 className="text-2xl font-black text-blue-600 tracking-tight flex items-center gap-1">
+            reli<span className="text-slate-800">Ai</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">Reliability Monitoring</p>
         </div>
@@ -90,7 +89,7 @@ const DashboardLayout = () => {
         {/* Top Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
           <h2 className="text-lg font-semibold text-slate-800">
-            {navItems.find(item => location.pathname === item.path)?.name || 'QA Project Details'}
+            {navItems.find(item => location.pathname === item.path)?.name || 'reli Project Details'}
           </h2>
           
           <div className="flex items-center gap-4">

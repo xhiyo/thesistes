@@ -60,7 +60,7 @@ const Dashboard = () => {
             <Activity size={24} />
           </div>
           <div>
-            <p className="text-sm text-slate-500 font-medium">Active QA Projects</p>
+            <p className="text-sm text-slate-500 font-medium">Active reli Projects</p>
             <p className="text-3xl font-bold text-slate-800">{totalProjects}</p>
           </div>
         </div>

@@ -232,7 +232,7 @@ const CreateProject = () => {
       <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
         <div className="mb-8 border-b border-slate-100 pb-6 flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Create New QA Project</h1>
+            <h1 className="text-2xl font-bold text-slate-800">Create New reli Project</h1>
             <p className="text-slate-500 mt-2">Design your testing instrument manually, or auto-generate from Excel.</p>
           </div>
           <div className="shrink-0 bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">

@@ -45,8 +45,7 @@ const Login = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center text-blue-600 mb-4">
           <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center gap-2">
-            <span className="bg-blue-600 text-white p-2 rounded-xl"><Database size={24} /></span>
-            <span className="text-2xl font-bold tracking-wide">QA CoreMetrics</span>
+            <span className="text-3xl font-black text-blue-600 tracking-tight">reli<span className="text-slate-800">Ai</span></span>
           </div>
         </div>
         <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
