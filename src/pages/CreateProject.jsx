@@ -20,7 +20,7 @@ const CreateProject = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Check file size (1MB = 1 * 1024 * 1024 bytes)
+
     const MAX_SIZE = 1 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       alert("Ukuran file terlalu besar! Maksimal ukuran file adalah 100 KB.");

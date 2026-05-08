@@ -86,73 +86,65 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart Section */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 lg:col-span-2">
-          <h3 className="text-lg font-semibold text-slate-800 mb-6">Overall Reliability (Cronbach's Alpha)</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 1]} tick={{ fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: '#f1f5f9' }}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                />
-                <Bar dataKey="alpha" radius={[4, 4, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Project List */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-slate-800">Recent Projects</h3>
-            <Link to="/projects" className="text-sm text-blue-600 hover:underline">View All</Link>
+      <div className="grid grid-cols-1 gap-6">
+        {/* Project List - Expanded */}
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200/60">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-xl font-bold text-slate-800 tracking-tight">Project Reliability Monitoring</h3>
+            <Link to="/projects" className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest border-b-2 border-blue-100 pb-1">View All Projects</Link>
           </div>
 
-          <div className="space-y-4">
-            {projectsData.map(project => (
-              <Link
-                key={project.id}
-                to={`/projects/${project.id}`}
-                className="block p-4 rounded-lg border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="font-medium text-slate-800 group-hover:text-blue-700 block flex-1">
-                    {project.name}
-                  </div>
-                  <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {projectsData.length === 0 ? (
+              <div className="col-span-full py-12 text-center bg-slate-50 rounded-xl border border-slate-200">
+                <p className="text-slate-400 text-sm">No projects found.</p>
+              </div>
+            ) : (
+              projectsData.map(project => (
+                <Link
+                  key={project.id}
+                  to={`/projects/${project.id}`}
+                  className="group bg-white p-5 rounded-xl border border-slate-200 hover:border-blue-400 transition-colors"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <h4 className="font-bold text-slate-800 truncate pr-4">
+                      {project.name}
+                    </h4>
                     <button
                       onClick={async (e) => {
-                        e.preventDefault(); // Prevent Link navigation
-                        if (window.confirm(`Yakin ingin menghapus proyek "${project.name}"? Data tidak dapat dikembalikan.`)) {
+                        e.preventDefault();
+                        if (window.confirm(`Delete project?`)) {
                           const { deleteProject } = await import('../utils/storage');
                           await deleteProject(project.id);
                           setProjectsData(prev => prev.filter(p => p.id !== project.id));
                         }
                       }}
-                      className="text-slate-300 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
-                      title="Hapus Proyek"
+                      className="text-slate-300 hover:text-red-500 transition-colors"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
-                    <ArrowRight size={16} className="text-slate-400 group-hover:text-blue-600 transform group-hover:translate-x-1 transition-transform" />
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-full text-white ${project.statusObj.color}`}>
-                    α = {project.alpha !== null ? project.alpha.toFixed(3) : 'N/A'}
-                  </span>
-                  <span className="text-xs text-slate-500">{project.responses.length} Responden</span>
-                </div>
-              </Link>
-            ))}
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-medium uppercase tracking-wider">Cronbach's Alpha</span>
+                      <span className={`font-bold ${project.alpha >= 0.7 ? 'text-green-600' : 'text-amber-600'}`}>
+                        {project.alpha !== null ? project.alpha.toFixed(3) : '---'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-50">
+                      <span className="text-slate-400 font-medium uppercase tracking-wider">Responses</span>
+                      <span className="font-bold text-slate-700">{project.responses.length}</span>
+                    </div>
+
+                    <div className={`mt-2 py-1 text-center rounded text-[10px] font-bold uppercase tracking-widest ${project.statusObj.bg} ${project.statusObj.color} border ${project.statusObj.border}`}>
+                      {project.statusObj.label}
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
       </div>

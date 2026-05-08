@@ -1,30 +1,45 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { getProjectById, saveProject } from '../utils/storage';
-import { calculateCronbachAlpha, getReliabilityStatus, calculateItemStats } from '../utils/statistics';
-import { ArrowLeft, Plus, Download, AlertCircle, CheckCircle2, Sparkles, Bot, Loader2, Send, User } from 'lucide-react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import {
+  calculateCronbachAlpha,
+  getReliabilityStatus,
+  calculateItemStats,
+  calculateConstructMetrics,
+  calculateDescriptiveSummary
+} from '../utils/statistics';
+import { ArrowLeft, Plus, Sparkles, Bot, Loader2, Send, Shield, BarChart3, TrendingUp, AlertCircle, Share2, Check, Trash2 } from 'lucide-react';
 import { getAIAnalysis, sendAIChatMessage } from '../utils/gemini';
 import ReactMarkdown from 'react-markdown';
 
 const ProjectDetail = () => {
   const { id } = useParams();
+  const { currentUser } = useAuth();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [alpha, setAlpha] = useState(null);
   const [status, setStatus] = useState(null);
   const [stats, setStats] = useState({});
   const [itemStats, setItemStats] = useState([]);
+  const [constructMetrics, setConstructMetrics] = useState({ cr: null, ave: null });
+  const [descriptiveSummary, setDescriptiveSummary] = useState({});
 
   // AI States
-  const [aiAnalysis, setAiAnalysis] = useState(null); // Keeps the initial summary
+  const [aiAnalysis, setAiAnalysis] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSendingChat, setIsSendingChat] = useState(false);
-  const [aiError, setAiError] = useState(null);
+  const [copied, setCopied] = useState(false);
 
-  const contentRef = useRef(null);
+  const handleShareLink = () => {
+    const link = `${window.location.origin}/test/${project.id}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -33,18 +48,76 @@ const ProjectDetail = () => {
     }
   }, [chatMessages]);
 
+  // Function to calculate all statistics based on project data
+  const updateCalculations = (currentProject) => {
+    if (!currentProject || !currentProject.questions) return;
 
+    const itemKeys = currentProject.questions.map(q => q.id);
+    const responses = currentProject.responses || [];
+
+    const calcAlpha = calculateCronbachAlpha(responses, itemKeys);
+    setAlpha(calcAlpha);
+    setStatus(getReliabilityStatus(calcAlpha));
+
+    const iStats = calculateItemStats(responses, itemKeys);
+    setItemStats(iStats);
+    setConstructMetrics(calculateConstructMetrics(iStats));
+    setDescriptiveSummary(calculateDescriptiveSummary(responses, itemKeys));
+
+    if (responses.length > 0) {
+      let totalScoreSum = 0;
+      let maxPossible = responses.length * currentProject.questions.length * 5;
+
+      responses.forEach(res => {
+        currentProject.questions.forEach(q => {
+          totalScoreSum += (res[q.id] || 0);
+        });
+      });
+
+      setStats({
+        totalResponses: responses.length,
+        overallSatisfaction: Math.round((totalScoreSum / maxPossible) * 100) || 0
+      });
+    } else {
+      setStats({ totalResponses: 0, overallSatisfaction: 0 });
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId) => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus pertanyaan ini? Seluruh data jawaban untuk pertanyaan ini juga akan ikut terhapus dari sistem.")) return;
+
+    const updatedQuestions = project.questions.filter(q => q.id !== questionId);
+    const updatedResponses = (project.responses || []).map(res => {
+      const newRes = { ...res };
+      delete newRes[questionId];
+      return newRes;
+    });
+
+    const updatedProject = {
+      ...project,
+      questions: updatedQuestions,
+      responses: updatedResponses
+    };
+
+    try {
+      await saveProject(updatedProject);
+      setProject(updatedProject);
+      updateCalculations(updatedProject);
+      alert("Pertanyaan berhasil dihapus.");
+    } catch (err) {
+      alert("Gagal menghapus pertanyaan: " + err.message);
+    }
+  };
 
   const handleGenerateAI = async () => {
     setIsAnalyzing(true);
-    setAiError(null);
     try {
       const fullStats = { ...stats, alpha, statusLabel: status?.label };
-      const result = await getAIAnalysis(project, fullStats, itemStats);
+      const result = await getAIAnalysis(project, fullStats, itemStats, constructMetrics, descriptiveSummary);
       setAiAnalysis(result);
       setChatMessages([{ role: 'model', content: result }]);
     } catch (err) {
-      setAiError(err.message);
+      alert(err.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -53,15 +126,13 @@ const ProjectDetail = () => {
   const handleSendChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim() || isSendingChat) return;
-
     const userMessage = chatInput.trim();
     setChatInput('');
     setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsSendingChat(true);
-
     try {
       const fullStats = { ...stats, alpha, statusLabel: status?.label };
-      const reply = await sendAIChatMessage(project, fullStats, itemStats, chatMessages, userMessage);
+      const reply = await sendAIChatMessage(project, fullStats, itemStats, chatMessages, userMessage, constructMetrics, descriptiveSummary, currentUser?.displayName || currentUser?.email);
       setChatMessages(prev => [...prev, { role: 'model', content: reply }]);
     } catch (err) {
       setChatMessages(prev => [...prev, { role: 'error', content: err.message }]);
@@ -73,487 +144,253 @@ const ProjectDetail = () => {
   useEffect(() => {
     const fetchProject = async () => {
       setLoading(true);
-      const currentProject = await getProjectById(id);
-
-      if (currentProject) {
-        setProject(currentProject);
-        const itemKeys = currentProject.questions.map(q => q.id);
-
-        const calcAlpha = calculateCronbachAlpha(currentProject.responses, itemKeys);
-        setAlpha(calcAlpha);
-        setStatus(getReliabilityStatus(calcAlpha));
-
-        const iStats = calculateItemStats(currentProject.responses, itemKeys);
-        setItemStats(iStats);
-
-        if (currentProject.responses.length > 0) {
-          let totalScoreSum = 0;
-          let maxPossibleScore = currentProject.responses.length * currentProject.questions.length * 5;
-          let dist = { 'Highly Satisfied': 0, 'Satisfied': 0, 'Neutral': 0, 'Dissatisfied': 0 };
-
-          currentProject.responses.forEach(res => {
-            currentProject.questions.forEach(q => {
-              const val = res[q.id] || 0;
-              totalScoreSum += val;
-              if (val === 5) dist['Highly Satisfied']++;
-              else if (val === 4) dist['Satisfied']++;
-              else if (val === 3) dist['Neutral']++;
-              else if (val > 0) dist['Dissatisfied']++;
-            });
-          });
-
-          setStats({
-            totalResponses: currentProject.responses.length,
-            overallSatisfaction: Math.round((totalScoreSum / maxPossibleScore) * 100) || 0,
-            distribution: dist
-          });
-        } else {
-          setStats({
-            totalResponses: 0,
-            overallSatisfaction: 0,
-            distribution: {}
-          });
+      try {
+        const currentProject = await getProjectById(id);
+        if (currentProject) {
+          setProject(currentProject);
+          updateCalculations(currentProject);
         }
+      } catch (err) {
+        console.error("Fetch error:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-
     fetchProject();
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!project) return <div className="p-8">Project not found...</div>;
-
-  // Donut chart data
-  const pieData = stats.distribution ? [
-    { name: 'Highly Satisfied', value: stats.distribution['Highly Satisfied'], color: '#3b82f6' },
-    { name: 'Satisfied', value: stats.distribution['Satisfied'], color: '#0ea5e9' },
-    { name: 'Neutral', value: stats.distribution['Neutral'], color: '#f59e0b' },
-    { name: 'Dissatisfied', value: stats.distribution['Dissatisfied'], color: '#ef4444' },
-  ].filter(d => d.value > 0) : [];
-
-  // Actual Item-Total correlations for the bar chart
-  const barData = project.questions.map((q, idx) => {
-    const itemStat = itemStats.find(s => s.id === q.id);
-    const correlation = itemStat && itemStat.correlation ? itemStat.correlation : 0;
-
-    return {
-      name: `Q${idx + 1}`,
-      correlation: correlation
-    };
-  });
-
-  // Premium SVG Gauge Component
-  const SemiCircleGauge = ({ value, label, colorClass }) => {
-    let percentage = value <= 1 && value >= -1 ? value * 100 : value;
-    if (percentage < 0) percentage = 0;
-    if (percentage > 100) percentage = 100;
-
-    const radius = 64;
-    const strokeWidth = 14;
-    const cx = 80;
-    const cy = 74;
-    const circumference = Math.PI * radius;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    return (
-      <div className="flex flex-col items-center">
-        <div className="w-40 h-20 flex justify-center mb-1">
-          <svg viewBox="0 0 160 85" className="w-full h-full overflow-visible drop-shadow-sm">
-            <defs>
-              <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#6366f1" />
-              </linearGradient>
-            </defs>
-
-            {/* Background Arc */}
-            <path
-              d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
-              fill="none"
-              stroke="#f1f5f9"
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-
-            {/* Foreground Arc */}
-            <path
-              d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
-              fill="none"
-              stroke="url(#gauge-grad)"
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              className="transition-all duration-1000 ease-out"
-            />
-
-            {/* Needle Group */}
-            <g
-              className="transition-all duration-1000 ease-out"
-              style={{ transformOrigin: `${cx}px ${cy}px`, transform: `rotate(${(percentage / 100) * 180}deg)` }}
-            >
-              {/* Tapered Needle */}
-              <path d={`M ${cx - radius + 8} ${cy} L ${cx} ${cy - 3} L ${cx} ${cy + 3} Z`} fill="#334155" />
-              <circle cx={cx - radius + 8} cy={cy} r="2" fill="#334155" />
-            </g>
-
-            {/* Center Pivot */}
-            <circle cx={cx} cy={cy} r="6" fill="#1e293b" stroke="white" strokeWidth="2.5" className="drop-shadow-sm" />
-          </svg>
-        </div>
-        {label && <p className={`font-bold text-sm ${colorClass}`}>{label}</p>}
-      </div>
-    );
-  };
+  if (loading) return <div className="p-8 text-center text-slate-400 font-medium animate-pulse">Loading project data...</div>;
+  if (!project) return <div className="p-8 text-center font-medium text-slate-500">Project not found.</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-12 bg-[#f4f7f9] p-4 rounded-xl">
-      {/* Action Bar (Not Printed) */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm print:hidden">
+    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto bg-slate-50 min-h-screen font-sans">
+
+      {/* HEADER */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
         <div>
-          <Link to="/" className="inline-flex items-center text-sm text-slate-500 hover:text-blue-600 mb-2 transition-colors">
-            <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
+          <Link to="/" className="text-xs font-bold text-slate-400 hover:text-blue-600 flex items-center gap-1 mb-1 uppercase tracking-wider transition-colors">
+            <ArrowLeft size={14} /> Back to Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-slate-800 uppercase tracking-wide">QA Report Console</h1>
+          <h1 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">{project.name}</h1>
         </div>
-
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => {
-              const url = `${window.location.origin}/test/${project.id}`;
-              navigator.clipboard.writeText(url);
-              alert("Link disalin! Bagikan ke Tester:\n" + url);
-            }}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-sm font-medium"
+            onClick={handleShareLink}
+            className={`${copied ? 'bg-green-600' : 'bg-slate-900'} text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all active:scale-95`}
           >
-            <Download size={16} className="rotate-180" />
-            SHARE TEST LINK
+            {copied ? <Check size={16} /> : <Share2 size={16} />}
+            {copied ? 'LINK COPIED!' : 'SHARE LINK'}
           </button>
-          <Link
-            to={`/test/${project.id}`}
-            target="_blank"
-            className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-900 transition-colors shadow-sm text-sm font-medium"
-          >
-            <Plus size={16} />
-            ADD TESTER RESPONSE
-          </Link>
-          {!aiAnalysis && !isAnalyzing && (
-            <button
-              onClick={handleGenerateAI}
-              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-sm font-medium"
-            >
-              <Bot size={16} />
-              GENERATE AI ANALYSIS
-            </button>
-          )}
-          {isAnalyzing && (
-            <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold shadow-sm">
-              <Loader2 size={16} className="animate-spin" />
-              ANALYZING...
-            </div>
-          )}
-
         </div>
       </div>
 
-      {/* Printable Area */}
-      <div ref={contentRef} className="print:p-8 print:bg-white print:block space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
 
-        {/* Printable Header (Only visible when printing or in normal view) */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 print:shadow-none print:border-none print:p-0 print:mb-8">
-          <div className="flex justify-between items-end border-b border-slate-100 pb-4 print:border-slate-800 print:pb-2">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800 uppercase tracking-wide">Statistical Validity & Summary Report</h1>
-              <p className="text-slate-500 text-sm mt-1 font-medium">Project Name: <span className="text-slate-800 font-bold">{project.name}</span></p>
+        {/* LEFT COLUMN */}
+        <div className="xl:col-span-2 space-y-6">
+
+          {/* Reliability Card */}
+          <div className="bg-white p-10 rounded-3xl shadow-sm border border-slate-200/60 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
+              <Shield size={200} />
             </div>
-            <div className="text-right text-xs text-slate-400 print:text-black">
-              Generated by reliAi<br />
-              {new Date().toLocaleDateString('en-GB')}
+            <div className="text-center md:text-left relative z-10">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mb-3">Cronbach's Alpha Reliability</p>
+              <h2 className="text-8xl font-bold text-slate-900 leading-none mb-4 tracking-tighter">
+                {alpha !== null ? alpha.toFixed(3) : '.---'}
+              </h2>
+              <div className={`inline-flex px-4 py-1.5 rounded-lg font-bold text-[10px] uppercase tracking-widest ${status?.bg} ${status?.color} border ${status?.border}`}>
+                {status?.label}
+              </div>
+            </div>
+
+            <div className="flex-1 grid grid-cols-2 gap-4 w-full max-w-sm relative z-10">
+              <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100">
+                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1 tracking-widest">CR (Composite)</p>
+                <p className="text-3xl font-bold text-slate-800">{constructMetrics.cr || '--'}</p>
+              </div>
+              <div className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100">
+                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1 tracking-widest">AVE (Validity)</p>
+                <p className="text-3xl font-bold text-slate-800">{constructMetrics.ave || '--'}</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* AI Analysis & Chat Section */}
-        {(chatMessages.length > 0 || aiError) && (
-          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-blue-100 mb-6 relative overflow-hidden flex flex-col max-h-[800px]">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 opacity-5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
-
-            <div className="flex items-center justify-between mb-4 relative z-10 shrink-0">
-              <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2">
-                <Sparkles size={18} className="text-blue-600" />
-                AI Assistant
-              </h3>
+          {/* Descriptive Grid */}
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
+            <div className="flex items-center gap-2 mb-6">
+              <BarChart3 size={20} className="text-blue-500" />
+              <h3 className="font-bold text-slate-800 text-xs uppercase tracking-[0.2em]">Descriptive Statistics Summary</h3>
             </div>
-
-            <div className="relative z-10 flex-1 overflow-y-auto mb-4 pr-2 space-y-4">
-              {aiError && (
-                <div className="p-4 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100">
-                  {aiError}
-                </div>
-              )}
-
-              {chatMessages.map((msg, index) => (
-                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl p-4 shadow-sm border ${msg.role === 'user'
-                    ? 'bg-indigo-600 text-white border-indigo-700 rounded-tr-sm'
-                    : msg.role === 'error'
-                      ? 'bg-red-50 text-red-600 border-red-100 rounded-tl-sm'
-                      : 'bg-white text-slate-800 border-indigo-100/50 rounded-tl-sm prose prose-sm prose-slate max-w-none prose-headings:text-indigo-900 prose-a:text-blue-600 prose-strong:text-indigo-800'
-                    }`}>
-                    {msg.role === 'user' ? (
-                      <p className="text-sm whitespace-pre-wrap m-0">{msg.content}</p>
-                    ) : (
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    )}
-                  </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { label: 'Mean Score', val: descriptiveSummary.mean },
+                { label: 'Std Deviation', val: descriptiveSummary.stdDev },
+                { label: 'Skewness', val: descriptiveSummary.skewness },
+                { label: 'Kurtosis', val: descriptiveSummary.kurtosis },
+                { label: 'N (Resp)', val: descriptiveSummary.n },
+                { label: 'K (Items)', val: descriptiveSummary.k }
+              ].map((item, i) => (
+                <div key={i} className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 text-center flex flex-col justify-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-tighter">{item.label}</p>
+                  <p className="text-2xl font-bold text-slate-800">{item.val ?? '--'}</p>
                 </div>
               ))}
-              {isSendingChat && (
-                <div className="flex justify-start">
-                  <div className="bg-white border border-indigo-100/50 rounded-2xl rounded-tl-sm p-4 shadow-sm flex items-center gap-2">
-                    <Loader2 size={16} className="text-indigo-600 animate-spin" />
-                    <span className="text-sm text-slate-500 font-medium">AI is thinking...</span>
-                  </div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
             </div>
-
-            {/* Chat Input */}
-            <form onSubmit={handleSendChat} className="relative z-10 shrink-0 mt-2 flex gap-2 print:hidden">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask AI anything about these results..."
-                className="flex-1 bg-white border border-indigo-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                disabled={isSendingChat}
-              />
-              <button
-                type="submit"
-                disabled={!chatInput.trim() || isSendingChat}
-                className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center"
-              >
-                <Send size={18} />
-              </button>
-            </form>
           </div>
-        )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-
-          {/* Left Column: Reliability & Table */}
-          <div className="xl:col-span-2 space-y-6">
-
-            <div className="flex flex-col md:flex-row gap-6">
-              {/* System Reliability Card */}
-              <div className="bg-white p-6 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex-1 border border-slate-100 flex flex-col justify-between">
-                <h3 className="text-lg font-bold text-slate-800 mb-6">System Reliability</h3>
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-slate-500 text-sm mb-1">Cronbach's Alpha (α)</p>
-                    <p className="text-6xl font-bold text-slate-900 mb-2">
-                      α = {alpha !== null ? alpha.toFixed(2) : '-.--'}
-                    </p>
-                    <p className={`font-bold text-lg ${status?.text || 'text-slate-500'}`}>
-                      {status?.label ? status.label.toUpperCase() : 'NO DATA'}
-                    </p>
-                  </div>
-                  <div className="pb-4">
-                    <SemiCircleGauge
-                      value={alpha || 0}
-                      label=""
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Small Gauges */}
-              <div className="flex flex-col justify-between gap-4 w-full md:w-48 shrink-0">
-                <div className="bg-white p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 text-center flex flex-col items-center justify-center flex-1">
-                  <p className="text-xs font-bold text-slate-800 mb-2">Overall Success Rate</p>
-                  <SemiCircleGauge value={alpha !== null ? 1 : 0} label="" />
-                  <p className="text-xs font-medium text-slate-600 mt-[-10px]">Tests Run: {stats.totalResponses || 0}</p>
-                </div>
-                <div className="bg-white p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 text-center flex flex-col items-center justify-center flex-1">
-                  <p className="text-xs font-bold text-slate-800 mb-2">Average Satisfaction</p>
-                  <SemiCircleGauge value={(stats.overallSatisfaction || 0) / 100} label="" />
-                  <p className="text-xs font-medium text-slate-600 mt-[-10px]">Score: {stats.overallSatisfaction || 0}%</p>
-                </div>
-              </div>
+          {/* Item Table */}
+          <div className="bg-white p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.02)] border border-slate-100">
+            <div className="flex items-center gap-2 mb-6">
+              <TrendingUp size={16} className="text-indigo-500" />
+              <h3 className="font-bold text-slate-800 text-[10px] uppercase tracking-widest">Full Psychometric Item Metrics</h3>
             </div>
-
-            {/* Question Statistics */}
-            <div className="bg-white p-6 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Question Statistics</h3>
-              <p className="text-xs text-slate-500 mb-4">Real-time Item Mean and Variance extraction.</p>
-
-              <table className="w-full text-left text-sm">
-                <thead className="border-b-2 border-slate-200">
-                  <tr>
-                    <th className="py-3 font-bold text-slate-700">Question</th>
-                    <th className="py-3 font-bold text-slate-700 text-center">Item Mean</th>
-                    <th className="py-3 font-bold text-slate-700 text-center">Item Variance</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[11px] border-separate border-spacing-y-2">
+                <thead>
+                  <tr className="text-slate-300">
+                    <th className="pb-4 font-bold uppercase pl-2">Item</th>
+                    <th className="pb-4 font-bold text-center px-2">MEAN</th>
+                    <th className="pb-4 font-bold text-center px-2">STD DEV</th>
+                    <th className="pb-4 font-bold text-center px-2">r-CORR</th>
+                    <th className="pb-4 font-bold text-center px-2">R²</th>
+                    <th className="pb-4 font-bold text-center px-2 text-indigo-600">ALPHA DEL</th>
+                    <th className="pb-4 font-bold text-center px-2">QUALITY</th>
+                    <th className="pb-4 font-bold text-center px-2">ACTIONS</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {project.questions.map((q, i) => {
-                    const stat = itemStats.find(s => s.id === q.id) || { mean: 0, variance: 0 };
+                    const s = itemStats.find(stat => stat.id === q.id) || {};
+                    const isLow = (s.correctedCorrelation || 0) < 0.3 && alpha !== null;
+                    const isBetter = (s.alphaIfDeleted || 0) > (alpha || 0);
                     return (
-                      <tr key={q.id}>
-                        <td className="py-3 font-medium text-slate-800 max-w-[200px] truncate pr-4" title={q.text}>
-                          {q.text}
+                      <tr key={q.id} className="group transition-all">
+                        <td className="py-4 px-4 bg-slate-50/50 group-hover:bg-indigo-50/30 rounded-l-2xl font-bold text-slate-700">
+                          <span className="text-slate-300 mr-2">Q{i + 1}.</span> {q.text}
                         </td>
-                        <td className="py-3 text-center text-slate-600">{stat.mean.toFixed(2)}</td>
-                        <td className="py-3 text-center text-slate-600">{stat.variance.toFixed(3)}</td>
+                        <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-500 font-medium">{s.mean || '--'}</td>
+                        <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-500 font-medium">{s.stdDev || '--'}</td>
+                        <td className={`py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 font-black ${isLow ? 'text-red-500' : 'text-slate-700'}`}>{s.correctedCorrelation || '--'}</td>
+                        <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-400 font-medium">{s.rSquared || '--'}</td>
+                        <td className={`py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 font-black ${isBetter ? 'text-orange-500' : 'text-indigo-600'}`}>{s.alphaIfDeleted?.toFixed(3) || '--'}</td>
+                        <td className="py-4 px-2 text-center bg-slate-50/50 group-hover:bg-indigo-50/30">
+                          {isLow ? (
+                            <div className="flex items-center justify-center gap-1 text-red-500">
+                              <AlertCircle size={12} />
+                              <span className="text-[9px] font-bold uppercase tracking-tighter">Poor</span>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] font-bold uppercase tracking-tighter text-indigo-600">Optimal</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 rounded-r-2xl">
+                          <button
+                            onClick={() => handleDeleteQuestion(q.id)}
+                            className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                            title="Hapus Pertanyaan"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
-                    )
+                    );
                   })}
                 </tbody>
               </table>
-              {project.responses.length === 0 && (
-                <div className="py-6 text-center text-slate-500 text-sm">
-                  Insufficient data. Add tester responses to calculate statistics.
-                </div>
-              )}
             </div>
-
           </div>
+        </div>
 
-          {/* Right Column: Donut & Bar Charts */}
-          <div className="space-y-6">
-
-            {/* Score Distribution Donut */}
-            <div className="bg-white p-6 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 h-[340px] flex flex-col">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Score Distribution</h3>
-              <p className="text-xs text-slate-500 mb-2">Overall satisfaction level percentage distribution</p>
-
-              <div className="flex-1 relative flex items-center justify-center">
-                {pieData.length > 0 ? (
-                  <>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={pieData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={90}
-                          paddingAngle={2}
-                          dataKey="value"
-                          stroke="none"
-                        >
-                          {pieData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <p className="text-xs font-bold text-slate-500">TOTAL SCORE:</p>
-                      <p className="text-3xl font-bold text-slate-800">{stats.overallSatisfaction || 0}%</p>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-slate-400">No data available</p>
-                )}
+        {/* RIGHT COLUMN (AI Assistant) */}
+        <div className="xl:col-span-1">
+          <div className="sticky top-0 h-fit">
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200/60 flex flex-col h-[700px] overflow-hidden">
+              <div className="p-5 bg-indigo-600 text-white">
+                <div className="flex items-center gap-3">
+                  <Bot size={20} className="text-indigo-100" />
+                  <div>
+                    <h3 className="font-bold text-xs uppercase tracking-widest">Suki AI</h3>
+                    <p className="text-[9px] text-indigo-200 font-medium uppercase tracking-[0.2em]">Active AI Insights</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-x-4 gap-y-2 justify-center mt-2">
-                {pieData.map((entry, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                    {entry.name}
+              <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-slate-50/30">
+                {chatMessages.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-20">
+                    <Bot size={48} className="mb-4" />
+                    <p className="text-xs font-bold uppercase tracking-widest">Awaiting Analysis</p>
+                  </div>
+                )}
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[90%] shadow-sm ${msg.role === 'user'
+                      ? 'bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-none'
+                      : 'bg-white text-slate-800 p-5 rounded-2xl rounded-tl-none border border-slate-100 prose prose-sm prose-slate'
+                      }`}>
+                      {msg.role === 'user' ? (
+                        <p className="text-[11px] font-medium leading-relaxed">{msg.content}</p>
+                      ) : (
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      )}
+                    </div>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            {/* Item-Total Correlations Bar Chart */}
-            <div className="bg-white p-6 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex-1">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Item-Total Correlations</h3>
-              <p className="text-xs text-slate-500 mb-4">Dynamic, interactive charts identify underperforming survey questions.</p>
-
-              <div className="h-48">
-                {alpha !== null ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <YAxis domain={[0, 1]} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                      />
-                      <Bar dataKey="correlation" fill="#2563eb" radius={[2, 2, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-                    Insufficient data for correlations.
+                {isSendingChat && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-3 shadow-sm">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+                      </div>
+                    </div>
                   </div>
                 )}
+                <div ref={chatEndRef} />
               </div>
-            </div>
 
+              <form onSubmit={handleSendChat} className="p-4 bg-white border-t border-slate-50 flex gap-2">
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  placeholder="Ask about your research..."
+                  className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-xs font-medium focus:ring-1 focus:ring-indigo-500/20"
+                />
+                <button className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"><Send size={16} /></button>
+              </form>
+            </div>
           </div>
         </div>
 
-        {/* Questionnaire Reference Data Table */}
-        <div className="bg-white p-6 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 mt-6">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4">Raw Tester Responses ({project.responses.length})</h3>
+      </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-50 text-slate-600 border-y border-slate-200">
-                <tr>
-                  <th className="px-4 py-3 font-bold">Tester ID</th>
-                  {project.questions.map((q, idx) => (
-                    <th key={q.id} className="px-4 py-3 font-bold text-center" title={q.text}>
-                      Q{idx + 1}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 font-bold text-center border-l border-slate-200">Total</th>
+      {/* RAW DATA */}
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
+        <h3 className="font-bold text-slate-800 text-[10px] uppercase tracking-widest mb-6">Raw Dataset Verification</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[10px]">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-4 py-4 font-bold uppercase tracking-wider">Respondent</th>
+                {project.questions.map((_, i) => <th key={i} className="px-2 py-4 text-center font-bold">Q{i + 1}</th>)}
+                <th className="px-4 py-4 text-center font-bold border-l border-slate-100">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {project.responses.map(res => (
+                <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-4 py-3 font-bold text-slate-500">{res.testerName}</td>
+                  {project.questions.map(q => <td key={q.id} className="px-2 py-3 text-center text-slate-400 tabular-nums">{res[q.id]}</td>)}
+                  <td className="px-4 py-3 text-center font-bold text-slate-600 border-l border-slate-100 tabular-nums">{project.questions.reduce((s, q) => s + (res[q.id] || 0), 0)}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {project.responses.map((res) => {
-                  const total = project.questions.reduce((sum, q) => sum + (res[q.id] || 0), 0);
-                  return (
-                    <tr key={res.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-700">{res.testerName}</td>
-                      {project.questions.map((q) => (
-                        <td key={q.id} className="px-4 py-3 text-center text-slate-600">
-                          {res[q.id]}
-                        </td>
-                      ))}
-                      <td className="px-4 py-3 text-center font-bold text-slate-800 border-l border-slate-200">
-                        {total}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {project.responses.length === 0 && (
-                  <tr>
-                    <td colSpan={project.questions.length + 2} className="px-4 py-8 text-center text-slate-500">
-                      No responses recorded yet. Click "ADD TESTER RESPONSE" above.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
+
     </div>
   );
 };
