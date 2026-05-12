@@ -32,7 +32,7 @@ export const getAIAnalysis = async (projectData, statsData, itemStatsData, const
     const prompt = `Analisislah hasil kuesioner untuk produk/proyek "${projectData.name}" (Deskripsi: ${projectData.description}). Total responden n=${statsData.totalResponses}, jumlah pertanyaan=${projectData.questions.length}. Reliabilitas Alpha: ${statsData.alpha?.toFixed(3)} (${statsData.statusLabel}). ${rawDataString}\n\nBerikan kesimpulan akhir sangat singkat (2-3 kalimat) tentang kelayakan produk/instrumen ini dan saran utama. Bahasa Indonesia formal.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
     });
 

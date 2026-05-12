@@ -1,3 +1,8 @@
+// 1. Bagian Impor (Peralatan)
+// - useState, useEffect: Alat bawaan React untuk menyimpan data & menjalankan perintah otomatis.
+// - Link: Alat pindah halaman tanpa refresh browser.
+// - useAuth: Mengambil data pengguna yang sedang login.
+// - lucide-react: Kumpulan ikon cantik (seperti tong sampah, centang, peringatan).
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,9 +12,16 @@ import { Activity, CheckCircle, AlertTriangle, ArrowRight, Trash2 } from 'lucide
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
+
+  // 2. State & Data
+  // - projectsData: Penampung daftar proyek Anda. Awalnya kosong ([]).
+  // - loading: Status muat data. Jika true, memunculkan animasi muter-muter.
   const [projectsData, setProjectsData] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 3. Mengambil Data Otomatis
+  // useEffect ini berjalan otomatis sekali saat halaman Dashboard baru dibuka.
+  // Tugasnya mencari dan mengambil data proyek di memori berdasarkan email user yang login.
   useEffect(() => {
     const fetchProjects = async () => {
       setLoading(true);
@@ -42,6 +54,9 @@ const Dashboard = () => {
     );
   }
 
+  // 4. Logika Perhitungan (Dashboard Pintar)
+  // Menghitung otomatis total proyek, dan memfilter otomatis mana proyek 
+  // yang memiliki nilai reliabilitas (alpha) bagus (di atas atau sama dengan 0.7).
   const totalProjects = projectsData.length;
   const reliableProjects = projectsData.filter(p => p.alpha >= 0.7).length;
   const warningProjects = totalProjects - reliableProjects;
@@ -54,6 +69,8 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* 5. Tampilan Statistik Atas */}
+      {/* Menampilkan kotak-kotak ringkasan (Total, Reliable, Revision) menggunakan angka dari perhitungan di atas tadi. */}
       {/* Top Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -96,6 +113,9 @@ const Dashboard = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* 6. Daftar Proyek & Loop (.map) */}
+            {/* Logika IF: Jika projectsData kosong, munculkan teks "No projects found." */}
+            {/* Jika ada isinya, jalankan fungsi .map() untuk menduplikasi tampilan kotak proyek sebanyak jumlah data yang ada. */}
             {projectsData.length === 0 ? (
               <div className="col-span-full py-12 text-center bg-slate-50 rounded-xl border border-slate-200">
                 <p className="text-slate-400 text-sm">No projects found.</p>
@@ -111,6 +131,9 @@ const Dashboard = () => {
                     <h4 className="font-bold text-slate-800 truncate pr-4">
                       {project.name}
                     </h4>
+                    {/* 7. Fitur Hapus */}
+                    {/* Memunculkan konfirmasi jika ikon tong sampah diklik. Jika klik OK, sistem membuang proyek tersebut */}
+                    {/* dari memori (deleteProject) agar datanya tidak muncul lagi meski halaman direfresh. */}
                     <button
                       onClick={async (e) => {
                         e.preventDefault();
