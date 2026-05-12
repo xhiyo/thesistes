@@ -1,4 +1,4 @@
-import { collection, collectionGroup, getDocs, doc, setDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, collectionGroup, getDocs, getDoc, doc, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 
 export const getAllProjects = async (userEmail) => {
