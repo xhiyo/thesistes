@@ -20,7 +20,7 @@ const Projects = () => {
           .map(q => q.id);
         const alpha = calculateCronbachAlpha(proj.responses, itemKeys);
         const status = getReliabilityStatus(alpha);
-        
+
         return {
           ...proj,
           alpha,
@@ -34,10 +34,10 @@ const Projects = () => {
     fetchProjects();
   }, [currentUser?.email]);
 
-  const handleDelete = async (e, id, name) => {
+  const handleDelete = async (e, id, name, ownerEmail) => {
     e.preventDefault();
     if (window.confirm(`Yakin ingin menghapus proyek "${name}"? Data tidak dapat dikembalikan.`)) {
-      await deleteProject(id);
+      await deleteProject(id, ownerEmail);
       setProjectsData(prev => prev.filter(p => p.id !== id));
     }
   };
@@ -60,8 +60,8 @@ const Projects = () => {
           </h1>
           <p className="text-slate-500 text-sm mt-1">Daftar seluruh instrumen pengujian yang ada di sistem.</p>
         </div>
-        <Link 
-          to="/projects/new" 
+        <Link
+          to="/projects/new"
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm font-medium"
         >
           <Plus size={16} />
@@ -75,10 +75,10 @@ const Projects = () => {
             Belum ada proyek kuesioner. Silakan buat baru.
           </div>
         )}
-        
+
         {projectsData.map(project => (
-          <Link 
-            key={project.id} 
+          <Link
+            key={project.id}
             to={`/projects/${project.id}`}
             className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col"
           >
@@ -86,15 +86,15 @@ const Projects = () => {
               <h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors line-clamp-2">
                 {project.name}
               </h3>
-              <button 
-                onClick={(e) => handleDelete(e, project.id, project.name)}
+              <button
+                onClick={(e) => handleDelete(e, project.id, project.name, project.ownerEmail)}
                 className="text-slate-300 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors"
                 title="Hapus Proyek"
               >
                 <Trash2 size={18} />
               </button>
             </div>
-            
+
             <p className="text-sm text-slate-500 mb-6 flex-1 line-clamp-3">
               {project.description || "Tidak ada deskripsi."}
             </p>

@@ -116,7 +116,7 @@ const Dashboard = () => {
                         e.preventDefault();
                         if (window.confirm(`Delete project?`)) {
                           const { deleteProject } = await import('../utils/storage');
-                          await deleteProject(project.id);
+                          await deleteProject(project.id, project.ownerEmail);
                           setProjectsData(prev => prev.filter(p => p.id !== project.id));
                         }
                       }}
