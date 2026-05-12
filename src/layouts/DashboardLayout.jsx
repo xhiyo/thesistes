@@ -1,35 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Bell, UserCircle, LogOut, AlertOctagon } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, UserCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getAllProjects } from '../utils/storage';
-import { calculateCronbachAlpha } from '../utils/statistics';
 
 const DashboardLayout = () => {
   const location = useLocation();
   const { currentUser, logout } = useAuth();
-  const [needsRevisionCount, setNeedsRevisionCount] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      // Check if any projects need revision based on poor alpha (< 0.6)
-      const projects = await getAllProjects(currentUser?.email);
-      let count = 0;
-      projects.forEach(proj => {
-        if (proj.responses && proj.responses.length > 1) {
-          const itemKeys = proj.questions.map(q => q.id);
-          const alpha = calculateCronbachAlpha(proj.responses, itemKeys);
-          if (alpha !== null && alpha < 0.6) {
-            count++;
-          }
-        }
-      });
-      setNeedsRevisionCount(count);
-    };
-
-    fetchProjects();
-  }, [location.pathname, currentUser?.email]); // Re-calculate when navigating or switching accounts
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -92,42 +69,7 @@ const DashboardLayout = () => {
           </h2>
 
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative text-slate-400 hover:text-slate-600 transition-colors"
-                title={`${needsRevisionCount} notifications`}
-              >
-                <Bell size={20} />
-                {needsRevisionCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white">
-                    {needsRevisionCount}
-                  </span>
-                )}
-              </button>
 
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-lg border border-slate-100 p-4 z-50 animate-in fade-in slide-in-from-top-2">
-                  <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">System Notifications</h4>
-                  {needsRevisionCount > 0 ? (
-                    <Link to="/projects" onClick={() => setShowNotifications(false)} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-100 hover:bg-red-100 transition-colors cursor-pointer group">
-                      <AlertOctagon size={18} className="text-red-500 mt-0.5 group-hover:scale-110 transition-transform shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-red-700">Need Revision : {needsRevisionCount}</p>
-                        <p className="text-xs text-red-600 mt-1">There are {needsRevisionCount} project(s) with poor reliability scores (α &lt; 0.6) that require attention.</p>
-                      </div>
-                    </Link>
-                  ) : (
-                    <div className="py-4 text-center">
-                      <p className="text-sm text-slate-500 font-medium">No new notifications</p>
-                      <p className="text-xs text-slate-400 mt-1">All your projects are in good standing.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="h-8 w-px bg-slate-200"></div>
             <div className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 pr-2 rounded-full transition-colors">
               {currentUser?.picture ? (
                 <img src={currentUser.picture} alt="Profile" className="w-8 h-8 rounded-full" />

@@ -360,8 +360,6 @@ const ProjectDetail = () => {
           <table className="w-full text-left text-[10px]">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-4 py-4 font-bold uppercase tracking-wider whitespace-nowrap">Respondent</th>
-                
                 {/* Text Questions Headers */}
                 {project.questions.filter(q => q.type === 'text').map((q) => (
                   <th key={q.id} className="px-4 py-4 text-center font-bold text-slate-400 whitespace-nowrap max-w-[150px] truncate" title={q.text}>
@@ -388,8 +386,6 @@ const ProjectDetail = () => {
 
                 return (
                   <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3 font-bold text-slate-500 whitespace-nowrap">{res.testerName || 'Anonymous'}</td>
-                    
                     {/* Text Question Answers */}
                     {textQuestions.map(q => (
                       <td key={q.id} className="px-4 py-3 text-center text-slate-500 max-w-[150px] truncate" title={res[q.id] !== undefined ? String(res[q.id]) : ''}>
