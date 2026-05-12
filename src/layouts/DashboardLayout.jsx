@@ -27,7 +27,7 @@ const DashboardLayout = () => {
       });
       setNeedsRevisionCount(count);
     };
-    
+
     fetchProjects();
   }, [location.pathname, currentUser?.email]); // Re-calculate when navigating or switching accounts
 
@@ -47,7 +47,7 @@ const DashboardLayout = () => {
           </h1>
           <p className="text-xs text-slate-500 mt-1">Reliability Monitoring</p>
         </div>
-        
+
         <div className="p-4">
           <Link to="/projects/new" className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors font-medium text-sm">
             + Create Project
@@ -58,16 +58,15 @@ const DashboardLayout = () => {
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             const Icon = item.icon;
-            
+
             return (
               <Link
                 key={item.name}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive 
-                    ? 'bg-blue-50 text-blue-700 font-medium' 
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                  ? 'bg-blue-50 text-blue-700 font-medium'
+                  : 'text-slate-600 hover:bg-slate-100'
+                  }`}
               >
                 <Icon size={20} className={isActive ? 'text-blue-600' : 'text-slate-500'} />
                 {item.name}
@@ -75,7 +74,7 @@ const DashboardLayout = () => {
             );
           })}
         </nav>
-        
+
         <div className="p-4 border-t border-slate-200 text-sm text-slate-500 flex justify-between items-center">
           <p>Version 1.0</p>
           <button onClick={logout} className="text-slate-400 hover:text-red-500 transition-colors" title="Logout">
@@ -91,12 +90,12 @@ const DashboardLayout = () => {
           <h2 className="text-lg font-semibold text-slate-800">
             {navItems.find(item => location.pathname === item.path)?.name || 'reli Project Details'}
           </h2>
-          
+
           <div className="flex items-center gap-4">
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative text-slate-400 hover:text-slate-600 transition-colors" 
+                className="relative text-slate-400 hover:text-slate-600 transition-colors"
                 title={`${needsRevisionCount} notifications`}
               >
                 <Bell size={20} />
@@ -106,7 +105,7 @@ const DashboardLayout = () => {
                   </span>
                 )}
               </button>
-              
+
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-lg border border-slate-100 p-4 z-50 animate-in fade-in slide-in-from-top-2">
                   <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">System Notifications</h4>
@@ -127,7 +126,7 @@ const DashboardLayout = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="h-8 w-px bg-slate-200"></div>
             <div className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 pr-2 rounded-full transition-colors">
               {currentUser?.picture ? (

@@ -52,7 +52,10 @@ const ProjectDetail = () => {
   const updateCalculations = (currentProject) => {
     if (!currentProject || !currentProject.questions) return;
 
-    const itemKeys = currentProject.questions.map(q => q.id);
+    // Hanya ambil ID pertanyaan berskala likert untuk analisis statistik
+    const itemKeys = currentProject.questions
+      .filter(q => !q.type || q.type === 'likert')
+      .map(q => q.id);
     const responses = currentProject.responses || [];
 
     const calcAlpha = calculateCronbachAlpha(responses, itemKeys);
@@ -64,13 +67,13 @@ const ProjectDetail = () => {
     setConstructMetrics(calculateConstructMetrics(iStats));
     setDescriptiveSummary(calculateDescriptiveSummary(responses, itemKeys));
 
-    if (responses.length > 0) {
+    if (responses.length > 0 && itemKeys.length > 0) {
       let totalScoreSum = 0;
-      let maxPossible = responses.length * currentProject.questions.length * 5;
+      let maxPossible = responses.length * itemKeys.length * 5;
 
       responses.forEach(res => {
-        currentProject.questions.forEach(q => {
-          totalScoreSum += (res[q.id] || 0);
+        itemKeys.forEach(key => {
+          totalScoreSum += (res[key] || 0);
         });
       });
 
@@ -191,9 +194,6 @@ const ProjectDetail = () => {
 
           {/* Reliability Card */}
           <div className="bg-white p-10 rounded-3xl shadow-sm border border-slate-200/60 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
-              <Shield size={200} />
-            </div>
             <div className="text-center md:text-left relative z-10">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em] mb-3">Cronbach's Alpha Reliability</p>
               <h2 className="text-8xl font-bold text-slate-900 leading-none mb-4 tracking-tighter">
@@ -222,17 +222,15 @@ const ProjectDetail = () => {
               <BarChart3 size={20} className="text-blue-500" />
               <h3 className="font-bold text-slate-800 text-xs uppercase tracking-[0.2em]">Descriptive Statistics Summary</h3>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
                 { label: 'Mean Score', val: descriptiveSummary.mean },
-                { label: 'Std Deviation', val: descriptiveSummary.stdDev },
-                { label: 'Skewness', val: descriptiveSummary.skewness },
-                { label: 'Kurtosis', val: descriptiveSummary.kurtosis },
                 { label: 'N (Resp)', val: descriptiveSummary.n },
                 { label: 'K (Items)', val: descriptiveSummary.k }
               ].map((item, i) => (
                 <div key={i} className="p-5 bg-slate-50/50 rounded-2xl border border-slate-100 text-center flex flex-col justify-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-tighter">{item.label}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-tighter">{item.label}</p>
+                  {item.desc && <p className="text-[8px] text-slate-400 mb-2 leading-tight">{item.desc}</p>}
                   <p className="text-2xl font-bold text-slate-800">{item.val ?? '--'}</p>
                 </div>
               ))}
@@ -252,18 +250,16 @@ const ProjectDetail = () => {
                     <th className="pb-4 font-bold uppercase pl-2">Item</th>
                     <th className="pb-4 font-bold text-center px-2">MEAN</th>
                     <th className="pb-4 font-bold text-center px-2">STD DEV</th>
-                    <th className="pb-4 font-bold text-center px-2">r-CORR</th>
+                    <th className="pb-4 font-bold text-center px-2">SKEW</th>
+                    <th className="pb-4 font-bold text-center px-2">KURT</th>
+                    <th className="pb-4 font-bold text-center px-2">r</th>
                     <th className="pb-4 font-bold text-center px-2">R²</th>
-                    <th className="pb-4 font-bold text-center px-2 text-indigo-600">ALPHA DEL</th>
-                    <th className="pb-4 font-bold text-center px-2">QUALITY</th>
                     <th className="pb-4 font-bold text-center px-2">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {project.questions.map((q, i) => {
+                  {project.questions.filter(q => !q.type || q.type === 'likert').map((q, i) => {
                     const s = itemStats.find(stat => stat.id === q.id) || {};
-                    const isLow = (s.correctedCorrelation || 0) < 0.3 && alpha !== null;
-                    const isBetter = (s.alphaIfDeleted || 0) > (alpha || 0);
                     return (
                       <tr key={q.id} className="group transition-all">
                         <td className="py-4 px-4 bg-slate-50/50 group-hover:bg-indigo-50/30 rounded-l-2xl font-bold text-slate-700">
@@ -271,19 +267,10 @@ const ProjectDetail = () => {
                         </td>
                         <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-500 font-medium">{s.mean || '--'}</td>
                         <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-500 font-medium">{s.stdDev || '--'}</td>
-                        <td className={`py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 font-black ${isLow ? 'text-red-500' : 'text-slate-700'}`}>{s.correctedCorrelation || '--'}</td>
+                        <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-500 font-medium">{s.skewness !== null && s.skewness !== undefined ? s.skewness : '--'}</td>
+                        <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-500 font-medium">{s.kurtosis !== null && s.kurtosis !== undefined ? s.kurtosis : '--'}</td>
+                        <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 font-black text-slate-700">{s.correlation || '--'}</td>
                         <td className="py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 text-slate-400 font-medium">{s.rSquared || '--'}</td>
-                        <td className={`py-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 font-black ${isBetter ? 'text-orange-500' : 'text-indigo-600'}`}>{s.alphaIfDeleted?.toFixed(3) || '--'}</td>
-                        <td className="py-4 px-2 text-center bg-slate-50/50 group-hover:bg-indigo-50/30">
-                          {isLow ? (
-                            <div className="flex items-center justify-center gap-1 text-red-500">
-                              <AlertCircle size={12} />
-                              <span className="text-[9px] font-bold uppercase tracking-tighter">Poor</span>
-                            </div>
-                          ) : (
-                            <span className="text-[9px] font-bold uppercase tracking-tighter text-indigo-600">Optimal</span>
-                          )}
-                        </td>
                         <td className="py-4 px-4 text-center bg-slate-50/50 group-hover:bg-indigo-50/30 rounded-r-2xl">
                           <button
                             onClick={() => handleDeleteQuestion(q.id)}
@@ -367,25 +354,60 @@ const ProjectDetail = () => {
       </div>
 
       {/* RAW DATA */}
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60">
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/60 mt-6">
         <h3 className="font-bold text-slate-800 text-[10px] uppercase tracking-widest mb-6">Raw Dataset Verification</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[10px]">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-4 py-4 font-bold uppercase tracking-wider">Respondent</th>
-                {project.questions.map((_, i) => <th key={i} className="px-2 py-4 text-center font-bold">Q{i + 1}</th>)}
-                <th className="px-4 py-4 text-center font-bold border-l border-slate-100">TOTAL</th>
+                <th className="px-4 py-4 font-bold uppercase tracking-wider whitespace-nowrap">Respondent</th>
+                
+                {/* Text Questions Headers */}
+                {project.questions.filter(q => q.type === 'text').map((q) => (
+                  <th key={q.id} className="px-4 py-4 text-center font-bold text-slate-400 whitespace-nowrap max-w-[150px] truncate" title={q.text}>
+                    {q.text}
+                  </th>
+                ))}
+
+                {/* Likert Questions Headers (Q1, Q2, etc) */}
+                {project.questions.filter(q => !q.type || q.type === 'likert').map((_, i) => (
+                  <th key={i} className="px-2 py-4 text-center font-bold text-indigo-600 whitespace-nowrap">
+                    Q{i + 1}
+                  </th>
+                ))}
+                
+                <th className="px-4 py-4 text-center font-bold text-indigo-800 border-l border-slate-200 whitespace-nowrap">TOTAL (Likert)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {project.responses.map(res => (
-                <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-3 font-bold text-slate-500">{res.testerName}</td>
-                  {project.questions.map(q => <td key={q.id} className="px-2 py-3 text-center text-slate-400 tabular-nums">{res[q.id]}</td>)}
-                  <td className="px-4 py-3 text-center font-bold text-slate-600 border-l border-slate-100 tabular-nums">{project.questions.reduce((s, q) => s + (res[q.id] || 0), 0)}</td>
-                </tr>
-              ))}
+              {project.responses.map(res => {
+                const likertQuestions = project.questions.filter(q => !q.type || q.type === 'likert');
+                const textQuestions = project.questions.filter(q => q.type === 'text');
+                
+                const totalLikert = likertQuestions.reduce((s, q) => s + (Number(res[q.id]) || 0), 0);
+
+                return (
+                  <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3 font-bold text-slate-500 whitespace-nowrap">{res.testerName || 'Anonymous'}</td>
+                    
+                    {/* Text Question Answers */}
+                    {textQuestions.map(q => (
+                      <td key={q.id} className="px-4 py-3 text-center text-slate-500 max-w-[150px] truncate" title={res[q.id] !== undefined ? String(res[q.id]) : ''}>
+                        {res[q.id] !== undefined ? res[q.id] : '--'}
+                      </td>
+                    ))}
+
+                    {/* Likert Question Answers */}
+                    {likertQuestions.map(q => (
+                      <td key={q.id} className="px-2 py-3 text-center text-slate-400 font-medium">
+                        {res[q.id] !== undefined ? res[q.id] : '--'}
+                      </td>
+                    ))}
+                    
+                    <td className="px-4 py-3 text-center font-bold text-indigo-600 border-l border-slate-100 tabular-nums">{totalLikert}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

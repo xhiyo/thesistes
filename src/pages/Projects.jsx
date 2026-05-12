@@ -15,7 +15,9 @@ const Projects = () => {
       setLoading(true);
       const allProjects = await getAllProjects(currentUser?.email);
       const processed = allProjects.map(proj => {
-        const itemKeys = proj.questions.map(q => q.id);
+        const itemKeys = proj.questions
+          .filter(q => !q.type || q.type === 'likert')
+          .map(q => q.id);
         const alpha = calculateCronbachAlpha(proj.responses, itemKeys);
         const status = getReliabilityStatus(alpha);
         

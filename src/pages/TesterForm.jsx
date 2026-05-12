@@ -30,10 +30,10 @@ const TesterForm = () => {
     }
   }, [id, currentUser]);
 
-  const handleScoreChange = (questionId, score) => {
+  const handleScoreChange = (questionId, value) => {
     setAnswers(prev => ({
       ...prev,
-      [questionId]: parseInt(score)
+      [questionId]: value
     }));
   };
 
@@ -42,7 +42,7 @@ const TesterForm = () => {
     setIsSubmitting(true);
 
     // Validate
-    if (!testerName.trim() || Object.keys(answers).length !== project.questions.length) {
+    if (Object.keys(answers).length !== project.questions.length) {
       alert("Mohon isi dan jawab seluruh pertanyaan.");
       setIsSubmitting(false);
       return;
@@ -51,7 +51,7 @@ const TesterForm = () => {
     try {
       const newResponse = {
         id: `res-${Date.now()}`,
-        testerName: testerName,
+        testerName: testerName || 'Anonymous',
         testerEmail: currentUser?.email || '',
         ...answers
       };
@@ -98,37 +98,8 @@ const TesterForm = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Nama Lengkap</label>
-            <input
-              type="text"
-              value={testerName}
-              onChange={(e) => setTesterName(e.target.value)}
-              placeholder="Masukkan nama lengkap Anda"
-              className="w-full md:w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-slate-50"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Usia</label>
-            <input
-              type="number"
-              placeholder="Masukkan Usia anda"
-              className="w-full md:w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-slate-50"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Domisili</label>
-            <input
-              type="text"
-              placeholder="Masukkan domisili lengkap anda"
-              className="w-full md:w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-slate-50"
-              required
-            />
-          </div>
 
+        <form onSubmit={handleSubmit} className="space-y-8">
           <div className="space-y-6">
             <h3 className="font-semibold text-slate-800 text-lg">Questionnaire (1: Strongly Disagree - 5: Strongly Agree)</h3>
 
@@ -139,27 +110,42 @@ const TesterForm = () => {
                   {q.text}
                 </p>
 
-                <div className="flex gap-4 flex-wrap">
-                  {[1, 2, 3, 4, 5].map((score) => (
-                    <label
-                      key={score}
-                      className={`flex flex-col items-center justify-center w-12 h-12 rounded-full cursor-pointer transition-all border-2 ${answers[q.id] === score
-                        ? 'border-blue-600 bg-blue-50 text-blue-700 font-bold'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-slate-50'
-                        }`}
-                    >
-                      <input
-                        type="radio"
-                        name={`q-${q.id}`}
-                        value={score}
-                        className="hidden"
-                        onChange={() => handleScoreChange(q.id, score)}
-                        required
-                      />
-                      <span>{score}</span>
-                    </label>
-                  ))}
-                </div>
+                {q.type === 'text' ? (
+                  <textarea
+                    value={answers[q.id] || ''}
+                    onChange={(e) => {
+                      e.target.style.height = 'auto';
+                      e.target.style.height = e.target.scrollHeight + 'px';
+                      handleScoreChange(q.id, e.target.value);
+                    }}
+                    placeholder="Ketikkan jawaban Anda di sini..."
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white text-slate-700 resize-none overflow-hidden"
+                    rows={1}
+                    required
+                  />
+                ) : (
+                  <div className="flex gap-4 flex-wrap">
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <label
+                        key={score}
+                        className={`flex flex-col items-center justify-center w-12 h-12 rounded-full cursor-pointer transition-all border-2 ${answers[q.id] === score || answers[q.id] === parseInt(score)
+                          ? 'border-blue-600 bg-blue-50 text-blue-700 font-bold'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-slate-50'
+                          }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`q-${q.id}`}
+                          value={score}
+                          className="hidden"
+                          onChange={() => handleScoreChange(q.id, parseInt(score))}
+                          required
+                        />
+                        <span>{score}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -181,6 +167,7 @@ const TesterForm = () => {
             </button>
           </div>
         </form>
+
       </div>
     </div>
   );

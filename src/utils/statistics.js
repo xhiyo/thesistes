@@ -11,7 +11,8 @@ export const calculateCronbachAlpha = (responses, itemKeys) => {
 
   const k = itemKeys.length;
   if (totalVar === 0) return 0;
-  return Number(((k / (k - 1)) * (1 - itemVarSum / totalVar)).toFixed(3));
+  const alpha = ((k / (k - 1)) * (1 - itemVarSum / totalVar));
+  return isNaN(alpha) ? 0 : Number(alpha.toFixed(3));
 };
 
 export const getReliabilityStatus = (alpha) => {
@@ -27,9 +28,12 @@ export const calculateConstructMetrics = (itemStats) => {
   const sumL = loadings.reduce((a, b) => a + b, 0);
   const sumL2 = loadings.reduce((a, b) => a + b * b, 0);
   const sumErr = loadings.reduce((a, b) => a + (1 - b * b), 0);
+  const crValue = sumL * sumL / (sumL * sumL + sumErr);
+  const aveValue = mean(loadings.map(l => l * l));
+  
   return {
-    cr: Number((sumL * sumL / (sumL * sumL + sumErr)).toFixed(3)),
-    ave: Number(mean(loadings.map(l => l * l)).toFixed(3))
+    cr: isNaN(crValue) ? 0 : Number(crValue.toFixed(3)),
+    ave: isNaN(aveValue) ? 0 : Number(aveValue.toFixed(3))
   };
 };
 
@@ -37,15 +41,30 @@ export const calculateConstructMetrics = (itemStats) => {
 export const calculateDescriptiveSummary = (responses, itemKeys) => {
   if (!responses || responses.length === 0) return {};
   const valid = responses.filter(res => itemKeys.every(k => res[k] !== undefined && res[k] !== ""));
-  const totalScores = valid.map(r => itemKeys.reduce((s, k) => s + Number(r[k]), 0));
+
+  // 1. Rata-rata Skor (Mean per responden)
+  const meanScores = valid.map(r => itemKeys.reduce((s, k) => s + Number(r[k]), 0) / itemKeys.length);
+
+  // 2. Standar Deviasi Akademis (berdasarkan Rata-rata Skor)
+  const academicStdDev = sampleStandardDeviation(meanScores);
+
+  // 3. Rata-rata dari Standar Deviasi per item (seperti yang sering dihitung ChatGPT)
+  const itemStdDevs = itemKeys.map(key => {
+    const scores = valid.map(res => Number(res[key]));
+    return sampleStandardDeviation(scores);
+  });
+  const avgStdDev = mean(itemStdDevs);
+
+  const safeNum = (val, decimals = 5) => isNaN(val) ? 0 : Number(Number(val).toFixed(decimals));
 
   return {
     n: valid.length,
     k: itemKeys.length,
-    mean: Number(mean(totalScores).toFixed(5)),
-    stdDev: Number(sampleStandardDeviation(totalScores).toFixed(5)),
-    skewness: valid.length >= 3 ? Number(sampleSkewness(totalScores).toFixed(5)) : null,
-    kurtosis: valid.length >= 4 ? Number(sampleKurtosis(totalScores).toFixed(5)) : null
+    mean: safeNum(mean(meanScores), 5),
+    stdDev: safeNum(academicStdDev, 5),
+    stdDevChatGPT: safeNum(avgStdDev, 5),
+    skewness: valid.length >= 3 ? safeNum(sampleSkewness(meanScores), 5) : null,
+    kurtosis: valid.length >= 4 ? safeNum(sampleKurtosis(meanScores), 5) : null
   };
 };
 
@@ -58,26 +77,20 @@ export const calculateItemStats = (responses, itemKeys) => {
   return itemKeys.map(key => {
     const scores = valid.map(res => Number(res[key]));
 
-    // 1. Corrected Item-Total Correlation (Korelasi r-hitung)
-    const otherItemsTotal = valid.map(r =>
-      itemKeys.reduce((s, k) => k === key ? s : s + Number(r[k]), 0)
-    );
-    const correctedCorr = sampleCorrelation(scores, otherItemsTotal);
+    // Korelasi r-hitung (Raw Pearson Correlation)
     const rawCorr = sampleCorrelation(scores, totalScores);
-
-    // 2. Alpha if Item Deleted
-    const otherKeys = itemKeys.filter(k => k !== key);
-    const alphaIfDeleted = calculateCronbachAlpha(valid, otherKeys);
+    
+    const safeNum = (val, decimals = 3) => isNaN(val) ? 0 : Number(Number(val).toFixed(decimals));
 
     return {
       id: key,
-      mean: Number(mean(scores).toFixed(2)),
-      variance: Number(sampleVariance(scores).toFixed(3)),
-      stdDev: Number(sampleStandardDeviation(scores).toFixed(3)),
-      correlation: Number(rawCorr.toFixed(3)),
-      correctedCorrelation: Number(correctedCorr.toFixed(3)),
-      rSquared: Number((rawCorr * rawCorr).toFixed(3)),
-      alphaIfDeleted: alphaIfDeleted
+      mean: safeNum(mean(scores), 2),
+      variance: safeNum(sampleVariance(scores), 3),
+      stdDev: safeNum(sampleStandardDeviation(scores), 3),
+      skewness: scores.length >= 3 ? safeNum(sampleSkewness(scores), 3) : null,
+      kurtosis: scores.length >= 4 ? safeNum(sampleKurtosis(scores), 3) : null,
+      correlation: safeNum(rawCorr, 3),
+      rSquared: safeNum(rawCorr * rawCorr, 3)
     };
   });
 };

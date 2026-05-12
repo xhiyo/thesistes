@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { getAllProjects } from '../utils/storage';
 import { calculateCronbachAlpha, getReliabilityStatus } from '../utils/statistics';
 import { Activity, CheckCircle, AlertTriangle, ArrowRight, Trash2 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
@@ -16,7 +15,9 @@ const Dashboard = () => {
       setLoading(true);
       const allProjects = await getAllProjects(currentUser?.email);
       const processed = allProjects.map(proj => {
-        const itemKeys = proj.questions.map(q => q.id);
+        const itemKeys = proj.questions
+          .filter(q => !q.type || q.type === 'likert')
+          .map(q => q.id);
         const alpha = calculateCronbachAlpha(proj.responses || [], itemKeys);
         const status = getReliabilityStatus(alpha);
 

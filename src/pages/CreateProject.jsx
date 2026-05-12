@@ -12,18 +12,17 @@ const CreateProject = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [questions, setQuestions] = useState([
-    { id: `q-${Date.now()}-1`, text: '' }
-  ]);
+  const [questions, setQuestions] = useState([]);
 
   const handleExcelImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
 
-    const MAX_SIZE = 1 * 1024 * 1024;
+    // Menggunakan batas 100 KB untuk file Excel (karena saat diekstrak menjadi JSON ukurannya bisa membengkak 10x lipat dan menabrak batas 1 MB Firebase)
+    const MAX_SIZE = 100 * 1024; // 100 KB
     if (file.size > MAX_SIZE) {
-      alert("Ukuran file terlalu besar! Maksimal ukuran file adalah 100 KB.");
+      alert("Ukuran file terlalu besar! Maksimal ukuran file adalah 100 KB");
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -48,7 +47,26 @@ const CreateProject = () => {
 
         // --- SMART AUTO-DETECT LIKERT COLUMNS ---
         const likertColIndices = [];
+
+        // Kata kunci untuk mendeteksi kolom demografi/informasi yang sering berisi angka tapi BUKAN likert
+        const demographicKeywords = ['usia', 'umur', 'domisili', 'gender', 'jenis kelamin', 'jk', 'kelas', 'semester', 'angkatan', 'pendapatan', 'gaji', 'anak', 'no', 'nomor', 'nama', 'email', 'hp', 'telepon', 'id'];
+
         for (let c = 0; c < headerRow.length; c++) {
+          const headerText = String(headerRow[c] || '').toLowerCase();
+
+          // Heuristik: Jika judul kolom mengandung kata kunci demografi, JANGAN jadikan Likert
+          const isDemographic = demographicKeywords.some(keyword => {
+            return headerText === keyword ||
+              headerText.startsWith(keyword) || // Menangkap 'usiaanda', 'usiaku'
+              headerText.includes(` ${keyword}`) || // Menangkap 'berapa usia'
+              headerText.includes(`_${keyword}`) || // Menangkap 'berapa_usia'
+              headerText.includes(`-${keyword}`);   // Menangkap 'berapa-usia'
+          });
+
+          if (isDemographic) {
+            continue; // Lewati kolom ini dari pengecekan Likert
+          }
+
           let isLikert = true;
           let hasData = false;
 
@@ -94,14 +112,40 @@ const CreateProject = () => {
           }
         }
 
-        // --- PARSE QUESTIONS ---
+        // --- PARSE QUESTIONS (Likert and Text) ---
         const parsedQuestions = [];
-        likertColIndices.forEach((c) => {
-          parsedQuestions.push({
-            id: `q-${Date.now()}-${c}`,
-            text: String(headerRow[c] || `Pertanyaan ${c}`)
-          });
-        });
+        const colMapping = []; // Menyimpan mapping index kolom ke question ID
+
+        for (let c = 0; c < headerRow.length; c++) {
+          if (c === nameColIndex) continue; // Skip name column, ini masuk ke testerName
+
+          // Cek apakah kolom ini punya data sama sekali
+          let hasData = false;
+          for (let r = 1; r < data.length; r++) {
+            if (data[r] && data[r][c] !== undefined && data[r][c] !== null && String(data[r][c]).trim() !== '') {
+              hasData = true;
+              break;
+            }
+          }
+          if (!hasData) continue; // Skip kolom kosong
+
+          const qId = `q-${Date.now()}-${c}`;
+          if (likertColIndices.includes(c)) {
+            parsedQuestions.push({
+              id: qId,
+              text: String(headerRow[c] || `Pertanyaan ${c}`),
+              type: 'likert'
+            });
+            colMapping[c] = qId;
+          } else {
+            parsedQuestions.push({
+              id: qId,
+              text: String(headerRow[c] || `Informasi ${c}`),
+              type: 'text'
+            });
+            colMapping[c] = qId;
+          }
+        }
 
         // --- PARSE RESPONSES ---
         const parsedResponses = [];
@@ -129,21 +173,29 @@ const CreateProject = () => {
             testerName
           };
 
-          for (let j = 0; j < likertColIndices.length; j++) {
-            const c = likertColIndices[j];
+          for (let c = 0; c < headerRow.length; c++) {
+            const qId = colMapping[c];
+            if (!qId) continue; // Skip jika kolom tidak diparse sebagai pertanyaan
+
             let val = row[c];
-            let numVal = Number(val);
 
-            // Auto fallback for empty/invalid cell within a detected Likert column
-            // We use 3 (Neutral) to ensure we don't break the Cronbach Alpha calc
-            if (isNaN(numVal) || numVal < 1 || numVal > 5) {
-              numVal = 3;
+            if (likertColIndices.includes(c)) {
+              let numVal = Number(val);
+              // Auto fallback for empty/invalid cell within a detected Likert column
+              if (isNaN(numVal) || numVal < 1 || numVal > 5) {
+                numVal = 3;
+              }
+              responseObj[qId] = numVal;
+            } else {
+              // Simpan sebagai text biasa
+              responseObj[qId] = val !== undefined && val !== null ? String(val) : '';
             }
-
-            responseObj[parsedQuestions[j].id] = numVal;
           }
           parsedResponses.push(responseObj);
         }
+
+        // Convert 2D array into array of strings to avoid Firebase "nested arrays" error
+        const stringifiedData = data.map(row => Array.isArray(row) ? row.join(' | ') : String(row));
 
         // Create Project
         const projectName = name.trim() || file.name.replace(/\.[^/.]+$/, "");
@@ -156,6 +208,7 @@ const CreateProject = () => {
           status: 'Active',
           questions: parsedQuestions,
           responses: parsedResponses
+          // Hapus rawData karena menyebabkan batas 1MB Firebase terlampaui
         };
 
         setIsSaving(true);
@@ -178,7 +231,7 @@ const CreateProject = () => {
   };
 
   const addQuestion = () => {
-    setQuestions([...questions, { id: `q-${Date.now()}-${questions.length + 1}`, text: '' }]);
+    setQuestions([...questions, { id: `q-${Date.now()}-${questions.length + 1}`, text: '', type: 'likert' }]);
   };
 
   const updateQuestion = (id, newText) => {
@@ -186,9 +239,7 @@ const CreateProject = () => {
   };
 
   const removeQuestion = (id) => {
-    if (questions.length > 1) {
-      setQuestions(questions.filter(q => q.id !== id));
-    }
+    setQuestions(questions.filter(q => q.id !== id));
   };
 
   const handleSubmit = async (e) => {
@@ -283,37 +334,75 @@ const CreateProject = () => {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-              <h3 className="font-semibold text-slate-800 text-lg">Testing Instrument (Questions)</h3>
+              <h3 className="font-medium text-slate-700 text-sm">Questionnaire (1: Sangat Tidak Setuju - 5: Sangat Setuju)</h3>
               <button
                 type="button"
                 onClick={addQuestion}
-                className="text-sm flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-md font-medium"
+                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-md font-medium"
               >
-                <Plus size={16} /> Add Question
+                <Plus size={14} /> Add Question
               </button>
             </div>
 
-            {questions.map((q, idx) => (
-              <div key={q.id} className="flex gap-4 items-start">
-                <span className="mt-2 font-bold text-slate-400 w-6 text-right">{idx + 1}.</span>
-                <input
-                  type="text"
-                  value={q.text}
-                  onChange={(e) => updateQuestion(q.id, e.target.value)}
-                  placeholder="e.g. The application loads quickly."
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => removeQuestion(q.id)}
-                  disabled={questions.length <= 1}
-                  className="mt-2 text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors"
-                >
-                  <Trash2 size={20} />
-                </button>
+
+
+            {questions.length === 0 ? (
+              <div className="text-center py-12 bg-slate-50/50 rounded-xl border border-slate-200 border-dashed">
+                <p className="text-slate-400 font-medium">No questions yet. Click "Add Question" to start building your instrument.</p>
               </div>
-            ))}
+            ) : (
+              questions.map((q, idx) => (
+                <div key={q.id} className="flex gap-3 items-start bg-slate-50/70 p-6 rounded-xl border border-slate-100 group">
+                  <span className="font-medium text-blue-600 pt-1">{idx + 1}.</span>
+                  <div className="flex-1 flex flex-col gap-3">
+                    <div className="flex gap-4 items-start">
+                      <input
+                        type="text"
+                        value={q.text}
+                        onChange={(e) => updateQuestion(q.id, e.target.value)}
+                        placeholder="Masukkan pertanyaan kuesioner..."
+                        className="flex-1 bg-transparent text-slate-800 font-medium placeholder:font-normal placeholder:text-slate-400 border-b border-slate-300 focus:outline-none focus:border-b-2 focus:border-blue-500 pb-1 transition-all"
+                        required
+                      />
+                      <select
+                        value={q.type || 'likert'}
+                        onChange={(e) => {
+                          const newQ = [...questions];
+                          const idxToUpdate = newQ.findIndex(x => x.id === q.id);
+                          newQ[idxToUpdate].type = e.target.value;
+                          setQuestions(newQ);
+                        }}
+                        className="text-xs border border-slate-200 rounded-md text-slate-600 bg-white shadow-sm px-2 py-1 outline-none focus:border-blue-500"
+                      >
+                        <option value="likert">Skala Likert (1-5)</option>
+                        <option value="text">Teks Bebas</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeQuestion(q.id)}
+                        className="text-slate-300 hover:text-red-500 transition-colors mt-0.5 ml-1"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+
+                    {(!q.type || q.type === 'likert') ? (
+                      <div className="flex items-center gap-3 mt-2">
+                        {[1, 2, 3, 4, 5].map((val) => (
+                          <div key={val} className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-500 font-medium text-sm shadow-sm cursor-not-allowed">
+                            {val}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-2 w-full max-w-lg">
+                        <textarea disabled placeholder="Responden akan mengisi teks jawaban di sini..." className="w-full h-20 p-3 bg-white/50 border border-slate-200 rounded-lg text-xs text-slate-400 cursor-not-allowed resize-none"></textarea>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="pt-6 border-t border-slate-100 flex justify-end">
