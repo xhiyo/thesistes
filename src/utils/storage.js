@@ -18,8 +18,17 @@ export const getAllProjects = async (userEmail) => {
   }
 };
 
-export const getProjectById = async (id) => {
+export const getProjectById = async (id, ownerEmail = null) => {
   try {
+    if (ownerEmail) {
+      const docRef = doc(db, 'users', ownerEmail, 'projects', id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+      return null;
+    }
+
     const q = query(collectionGroup(db, 'projects'), where('id', '==', id));
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {

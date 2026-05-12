@@ -148,7 +148,7 @@ const ProjectDetail = () => {
     const fetchProject = async () => {
       setLoading(true);
       try {
-        const currentProject = await getProjectById(id);
+        const currentProject = await getProjectById(id, currentUser?.email);
         if (currentProject) {
           setProject(currentProject);
           updateCalculations(currentProject);
@@ -160,7 +160,7 @@ const ProjectDetail = () => {
       }
     };
     fetchProject();
-  }, [id]);
+  }, [id, currentUser]);
 
   if (loading) return <div className="p-8 text-center text-slate-400 font-medium animate-pulse">Loading project data...</div>;
   if (!project) return <div className="p-8 text-center font-medium text-slate-500">Project not found.</div>;
