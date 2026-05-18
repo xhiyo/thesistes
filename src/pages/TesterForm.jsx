@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { getProjectById, saveProject } from '../utils/storage';
 import { useAuth } from '../context/AuthContext';
 import { Save, CheckCircle2 } from 'lucide-react';
 
 const TesterForm = () => {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const ownerEmail = searchParams.get('owner');
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
 
@@ -14,12 +16,19 @@ const TesterForm = () => {
   const [answers, setAnswers] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchProject = async () => {
-      const currentProject = await getProjectById(id);
-      if (currentProject) {
-        setProject(currentProject);
+      try {
+        const currentProject = await getProjectById(id, ownerEmail);
+        if (currentProject) {
+          setProject(currentProject);
+        } else {
+          setError("Proyek tidak ditemukan atau URL tidak lengkap.");
+        }
+      } catch (err) {
+        setError("Terjadi kesalahan saat memuat form.");
       }
     };
     fetchProject();
@@ -28,7 +37,7 @@ const TesterForm = () => {
     if (currentUser?.name) {
       setTesterName(currentUser.name);
     }
-  }, [id, currentUser]);
+  }, [id, ownerEmail, currentUser]);
 
   const handleScoreChange = (questionId, value) => {
     setAnswers(prev => ({
@@ -70,7 +79,8 @@ const TesterForm = () => {
     }
   };
 
-  if (!project) return <div className="p-8">Loading form...</div>;
+  if (error) return <div className="p-8 text-center text-red-500 mt-10 font-medium">{error}</div>;
+  if (!project) return <div className="p-8 text-center text-slate-500 mt-10 animate-pulse">Loading form...</div>;
 
   if (isSubmitted) {
     return (

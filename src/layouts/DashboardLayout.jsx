@@ -26,7 +26,8 @@ const DashboardLayout = () => {
         </div>
 
         <div className="p-4">
-          <Link to="/projects/new" className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors font-medium text-sm">
+          <Link to="/projects/new" className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white 
+          py-2 rounded-lg transition-colors font-medium text-sm">
             + Create Project
           </Link>
         </div>

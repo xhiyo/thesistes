@@ -34,7 +34,7 @@ const ProjectDetail = () => {
   const [copied, setCopied] = useState(false);
 
   const handleShareLink = () => {
-    const link = `${window.location.origin}/test/${project.id}`;
+    const link = `${window.location.origin}/test/${project.id}?owner=${encodeURIComponent(project.ownerEmail)}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -373,7 +373,7 @@ const ProjectDetail = () => {
                     Q{i + 1}
                   </th>
                 ))}
-                
+
                 <th className="px-4 py-4 text-center font-bold text-indigo-800 border-l border-slate-200 whitespace-nowrap">TOTAL (Likert)</th>
               </tr>
             </thead>
@@ -381,7 +381,7 @@ const ProjectDetail = () => {
               {project.responses.map(res => {
                 const likertQuestions = project.questions.filter(q => !q.type || q.type === 'likert');
                 const textQuestions = project.questions.filter(q => q.type === 'text');
-                
+
                 const totalLikert = likertQuestions.reduce((s, q) => s + (Number(res[q.id]) || 0), 0);
 
                 return (
@@ -399,7 +399,7 @@ const ProjectDetail = () => {
                         {res[q.id] !== undefined ? res[q.id] : '--'}
                       </td>
                     ))}
-                    
+
                     <td className="px-4 py-3 text-center font-bold text-indigo-600 border-l border-slate-100 tabular-nums">{totalLikert}</td>
                   </tr>
                 );
