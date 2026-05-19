@@ -49,7 +49,7 @@ const CreateProject = () => {
         const likertColIndices = [];
 
         // Kata kunci untuk mendeteksi kolom demografi/informasi yang sering berisi angka tapi BUKAN likert
-        const demographicKeywords = ['usia', 'umur', 'domisili', 'gender', 'jenis kelamin', 'jk', 'kelas', 'semester', 'angkatan', 'pendapatan', 'gaji', 'anak', 'no', 'nomor', 'nama', 'email', 'hp', 'telepon', 'id', 'kode', 'moda', 'skenario'];
+        const demographicKeywords = ['usia', 'umur', 'age', 'domisili', 'gender', 'jenis kelamin', 'jk', 'kelas', 'semester', 'angkatan', 'pendapatan', 'gaji', 'anak', 'no', 'nomor', 'nama', 'email', 'hp', 'telepon', 'id', 'kode', 'skenario'];
 
         for (let c = 0; c < headerRow.length; c++) {
           const headerText = String(headerRow[c] || '').toLowerCase();
